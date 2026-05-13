@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PCA Explorer — Step-by-Step Tutorial</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #070C14;
+    --surface: #0E1520;
+    --panel: #0A1219;
+    --plot: #1E2433;
+    --border: #1C2A3A;
+    --accent: #00E5CC;
+    --cyan: #26CCFF;
+    --orange: #FF7F26;
+    --purple: #CC4DFF;
+    --yellow: #FFD238;
+    --green: #4DFF8C;
+    --red: #FF5959;
+    --text: #D8E8F0;
+    --muted: #6C8292;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: radial-gradient(circle at top, rgba(0,229,204,.08), transparent 36%), var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    background: repeating-linear-gradient(to bottom,
+      transparent, transparent 3px, rgba(0,0,0,.08) 3px, rgba(0,0,0,.08) 4px);
+    mix-blend-mode: multiply;
+  }
+
+  #app {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 22px 16px 28px;
+  }
+
+  header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 16px;
+  }
+
+  .tag {
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.2rem, 5vw, 4.2rem);
+    letter-spacing: 3px;
+    line-height: 0.95;
+    margin: 0;
+    background: linear-gradient(135deg, #00E5CC, #00A8FF 48%, #FF6B35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  .status-card {
+    min-width: 310px;
+    background: rgba(14,21,32,.9);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 13px 16px;
+    box-shadow: 0 14px 40px rgba(0,0,0,.18);
+  }
+  .status-title {
+    color: var(--accent);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+  }
+  #info {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr auto;
+    gap: 12px;
+    background: rgba(10,18,25,.8);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 20;
+  }
+
+  .control {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+
+  .control label {
+    display: block;
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  select, button, input[type="range"] { font-family: 'JetBrains Mono', monospace; }
+  select {
+    width: 100%;
+    background: #121C2A;
+    border: 1px solid #274056;
+    color: var(--text);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .range-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .range-value {
+    min-width: 68px;
+    text-align: right;
+    color: var(--yellow);
+    font-weight: 700;
+    font-size: 13px;
+  }
+  #corrValue { color: var(--green); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct, 0%), var(--border) var(--pct, 0%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 12px rgba(0,229,204,.45);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+  }
+
+  .btn {
+    height: 100%;
+    border: 1px solid #2A73B8;
+    background: linear-gradient(135deg, rgba(18,64,114,.95), rgba(13,33,62,.95));
+    color: white;
+    border-radius: 10px;
+    padding: 0 18px;
+    min-height: 68px;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 1px;
+    transition: transform .15s, border-color .15s, filter .15s;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--accent); filter: brightness(1.08); }
+  .btn:active { transform: translateY(0); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    grid-template-rows: 1fr 0.46fr;
+    gap: 14px;
+  }
+
+  .panel {
+    min-height: 0;
+    background: rgba(10,18,25,.92);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.18);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(14,21,32,.95), rgba(10,18,25,.95));
+  }
+
+  .panel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 2px;
+    color: var(--muted);
+    font-size: 1.02rem;
+  }
+
+  .badge {
+    font-size: 9px;
+    letter-spacing: 1px;
+    border: 1px solid rgba(0,229,204,.35);
+    color: var(--accent);
+    background: rgba(0,229,204,.09);
+    border-radius: 999px;
+    padding: 4px 9px;
+    white-space: nowrap;
+  }
+
+  .plot {
+    width: 100%;
+    height: 100%;
+    min-height: 250px;
+  }
+
+  #plot3d, #plot2d { height: 510px; }
+  #barVar, #barCum { height: 235px; }
+
+  .explain {
+    margin-top: 16px;
+    background: rgba(14,21,32,.92);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text);
+  }
+  .explain b { color: var(--accent); }
+  .explain .warm { color: var(--orange); font-weight: 700; }
+
+  /* ── Tutorial Panel ── */
+  .tutorial {
+    margin-top: 14px;
+    background: rgba(10,18,25,.97);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.22);
+  }
+
+  .tut-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg,rgba(14,21,32,.98),rgba(10,18,25,.98));
+  }
+
+  .tut-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mode-pill {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    transition: background .3s, color .3s, border-color .3s;
+  }
+  .mode-pill.tutorial-mode {
+    background: rgba(0,229,204,.12);
+    border: 1px solid rgba(0,229,204,.4);
+    color: var(--accent);
+  }
+  .mode-pill.free-mode {
+    background: rgba(255,127,38,.12);
+    border: 1px solid rgba(255,127,38,.4);
+    color: var(--orange);
+  }
+
+  .tut-step-counter {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .tut-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .tut-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background .3s, transform .3s;
+    cursor: pointer;
+  }
+  .tut-dot.active {
+    background: var(--accent);
+    transform: scale(1.35);
+  }
+  .tut-dot.done {
+    background: rgba(0,229,204,.4);
+  }
+
+  .tut-body {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    padding: 18px 20px;
+    align-items: center;
+  }
+
+  .tut-content {}
+
+  .tut-step-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .tut-step-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    color: var(--text);
+    transition: opacity .25s;
+  }
+
+  .tut-step-text {
+    font-size: 12px;
+    line-height: 1.85;
+    color: var(--text);
+    max-width: 820px;
+    transition: opacity .25s;
+  }
+  .tut-step-text b { color: var(--accent); }
+  .tut-step-text .hi-orange { color: var(--orange); font-weight: 700; }
+  .tut-step-text .hi-yellow { color: var(--yellow); font-weight: 700; }
+  .tut-step-text .hi-green  { color: var(--green);  font-weight: 700; }
+  .tut-step-text .hi-purple { color: var(--purple); font-weight: 700; }
+  .tut-step-text .hi-red    { color: var(--red);    font-weight: 700; }
+
+  .tut-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 140px;
+    align-items: stretch;
+  }
+
+  .tut-btn {
+    border-radius: 9px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    transition: transform .15s, filter .15s, opacity .15s;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .tut-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+  .tut-btn:active:not(:disabled) { transform: translateY(0); }
+  .tut-btn:disabled { opacity: .35; cursor: default; }
+
+  .tut-btn-next {
+    background: linear-gradient(135deg, rgba(0,229,204,.25), rgba(0,168,255,.25));
+    border: 1px solid rgba(0,229,204,.5);
+    color: var(--accent);
+  }
+  .tut-btn-prev {
+    background: rgba(14,21,32,.9);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .tut-btn-free {
+    background: linear-gradient(135deg, rgba(255,127,38,.2), rgba(204,77,255,.2));
+    border: 1px solid rgba(255,127,38,.45);
+    color: var(--orange);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .tut-btn-restart {
+    background: rgba(14,21,32,.9);
+    border: 1px solid rgba(0,229,204,.3);
+    color: var(--accent);
+    font-size: 11px;
+  }
+
+  .tut-hint {
+    padding: 9px 20px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: .5px;
+    background: rgba(7,12,20,.6);
+  }
+  .tut-hint span { color: var(--accent); }
+
+  .controls-locked .control {
+    opacity: .55;
+    pointer-events: none;
+  }
+  .controls-locked .btn {
+    opacity: .55;
+    pointer-events: none;
+  }
+  .controls-free .control, .controls-free .btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  @media (max-width: 700px) {
+    .tut-body { grid-template-columns: 1fr; }
+    .tut-nav { flex-direction: row; flex-wrap: wrap; min-width: unset; }
+  }
+
+  @media (max-width: 950px) {
+    header { grid-template-columns: 1fr; }
+    .status-card { min-width: unset; }
+    .controls { grid-template-columns: 1fr; }
+    .btn { min-height: 48px; }
+    .grid { grid-template-columns: 1fr; grid-template-rows: auto; }
+    #plot3d, #plot2d { height: 430px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <div class="tag">ANN Course Project · Step-by-Step Tutorial</div>
+      <h1>PCA Explorer</h1>
+      <div class="subtitle">Follow the guided steps below to learn how PCA works — starting from uncorrelated data and building up to full dimensionality reduction. You can also switch to Free Explore at any time.</div>
+    </div>
+    <div class="status-card">
+      <div class="status-title">Current PCA Summary</div>
+      <div id="info">Generating data...</div>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="PCA controls">
+    <div class="control">
+      <label for="pairSelect">Show on X-Y axes</label>
+      <select id="pairSelect">
+        <option value="0">PC1 vs PC2</option>
+        <option value="1">PC1 vs PC3</option>
+        <option value="2">PC2 vs PC3</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="pcSlider">Highlight PC</label>
+      <div class="range-row">
+        <input type="range" id="pcSlider" min="1" max="3" step="1" value="1" />
+        <div class="range-value" id="pcValue">PC 1</div>
+      </div>
+    </div>
+
+    <div class="control">
+      <label for="corrSlider">Correlation / spread shape</label>
+      <div class="range-row">
+        <input type="range" id="corrSlider" min="0.05" max="0.97" step="0.01" value="0.05" />
+        <div class="range-value" id="corrValue">r = 0.82</div>
+      </div>
+    </div>
+
+    <button class="btn" id="regenBtn" type="button">↻ New Data</button>
+  </section>
+
+  <main class="grid">
+    <section class="panel">
+      <div class="panel-header">
+        <span class="panel-title">3D Data + Principal Component Axes</span>
+        <span class="badge">Drag to rotate</span>
+      </div>
+      <div id="plot3d" class="plot"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <span class="panel-title" id="pairTitle">PC1 vs PC2 Projection</span>
+        <span class="badge" id="projectionBadge">Highlighted: PC1</span>
+      </div>
+      <div id="plot2d" class="plot"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Variance Explained per Component</span>
+        <span class="badge">Yellow = selected</span>
+      </div>
+      <div id="barVar" class="plot"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Cumulative Variance</span>
+        <span class="badge">95% threshold</span>
+      </div>
+      <div id="barCum" class="plot"></div>
+    </section>
+  </main>
+
+  <section class="explain" id="explain" style="display:none"></section>
+
+  <!-- ── Tutorial Panel ── -->
+  <section class="tutorial" id="tutorialPanel">
+    <div class="tut-header">
+      <div class="tut-mode">
+        <span class="mode-pill tutorial-mode" id="modePill">TUTORIAL MODE</span>
+        <span class="tut-step-counter" id="stepCounter">Step 1 of 6</span>
+      </div>
+      <div class="tut-dots" id="tutDots"></div>
+    </div>
+
+    <div class="tut-body">
+      <div class="tut-content">
+        <div class="tut-step-label" id="tutLabel">Step 1</div>
+        <div class="tut-step-title" id="tutTitle">Loading...</div>
+        <div class="tut-step-text" id="tutText"></div>
+      </div>
+      <div class="tut-nav">
+        <button class="tut-btn tut-btn-next" id="nextBtn">Next Step →</button>
+        <button class="tut-btn tut-btn-prev" id="prevBtn" disabled>← Previous</button>
+        <button class="tut-btn tut-btn-free" id="freeBtn">⊹ Free Explore</button>
+        <button class="tut-btn tut-btn-restart" id="restartBtn" style="display:none">↺ Restart Tutorial</button>
+      </div>
+    </div>
+
+    <div class="tut-hint" id="tutHint">
+      <span>↓ Tip:</span> You can still interact with the plots and sliders while following the tutorial — the steps will set good starting values for you.
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+
+const N = 250;
+const COL = {
+  bg: '#070C14',
+  paper: '#0A1219',
+  plot: '#1E2433',
+  grid: '#34394A',
+  axis: '#8792A6',
+  text: '#D8E8F0',
+  muted: '#6C8292',
+  pt: 'rgba(115,148,230,0.54)',
+  proj: 'rgba(255,210,56,0.76)',
+  cyan: '#26CCFF',
+  orange: '#FF7F26',
+  purple: '#CC4DFF',
+  yellow: '#FFD238',
+  green: '#4DCC6B',
+  red: '#FF5959',
+  barBlue: '#2E61AD'
+};
+const PC_COLORS = [COL.cyan, COL.orange, COL.purple];
+const PAIRS = [[0,1], [0,2], [1,2]];
+
+let state = {
+  corr: 0.05,
+  data: [],
+  pca: null,
+  camera3d: null
+};
+
+const pairSelect = document.getElementById('pairSelect');
+const pcSlider = document.getElementById('pcSlider');
+const corrSlider = document.getElementById('corrSlider');
+const regenBtn = document.getElementById('regenBtn');
+
+function randn() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function dot(a, b) {
+  return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+}
+
+function norm(a) {
+  return Math.sqrt(dot(a, a));
+}
+
+function scale(a, s) {
+  return [a[0]*s, a[1]*s, a[2]*s];
+}
+
+function sub(a, b) {
+  return [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+}
+
+function add(a, b) {
+  return [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+}
+
+function normalize(a) {
+  const n = norm(a) || 1;
+  return scale(a, 1 / n);
+}
+
+function cross(a, b) {
+  return [
+    a[1]*b[2] - a[2]*b[1],
+    a[2]*b[0] - a[0]*b[2],
+    a[0]*b[1] - a[1]*b[0]
+  ];
+}
+
+function randomRotationMatrix() {
+  let a = normalize([randn(), randn(), randn()]);
+  let bRaw = [randn(), randn(), randn()];
+  let b = normalize(sub(bRaw, scale(a, dot(bRaw, a))));
+  let c = normalize(cross(a, b));
+  if (Math.random() < 0.5) c = scale(c, -1);
+  return [a, b, c]; // rows, equivalent to Q columns for this demo
+}
+
+function generateData(count, r) {
+  const s1 = 4.0;
+  const s2 = s1 * Math.max(0.08, 1 - r);
+  const s3 = s2 * Math.max(0.08, 1 - r * 0.5);
+  const Q = randomRotationMatrix();
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const z = [randn()*s1, randn()*s2, randn()*s3];
+    out.push([
+      z[0]*Q[0][0] + z[1]*Q[1][0] + z[2]*Q[2][0],
+      z[0]*Q[0][1] + z[1]*Q[1][1] + z[2]*Q[2][1],
+      z[0]*Q[0][2] + z[1]*Q[1][2] + z[2]*Q[2][2]
+    ]);
+  }
+  return out;
+}
+
+function computePCA(X) {
+  const mu = [0, 0, 0];
+  for (const row of X) {
+    mu[0] += row[0]; mu[1] += row[1]; mu[2] += row[2];
+  }
+  mu[0] /= X.length; mu[1] /= X.length; mu[2] /= X.length;
+
+  const Xc = X.map(row => [row[0]-mu[0], row[1]-mu[1], row[2]-mu[2]]);
+  const C = [[0,0,0], [0,0,0], [0,0,0]];
+  for (const row of Xc) {
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) C[i][j] += row[i] * row[j];
+    }
+  }
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) C[i][j] /= (X.length - 1);
+
+  const eig = jacobiEigenSym3(C);
+  const order = [0,1,2].sort((a,b) => eig.values[b] - eig.values[a]);
+  const values = order.map(i => Math.max(0, eig.values[i]));
+  const vectors = order.map(i => [eig.vectors[0][i], eig.vectors[1][i], eig.vectors[2][i]]);
+
+  // Stabilize direction signs so the demo does not flip labels wildly.
+  for (const v of vectors) {
+    const maxIdx = [0,1,2].reduce((best, idx) => Math.abs(v[idx]) > Math.abs(v[best]) ? idx : best, 0);
+    if (v[maxIdx] < 0) { v[0] *= -1; v[1] *= -1; v[2] *= -1; }
+  }
+
+  const total = values.reduce((a,b) => a + b, 0) || 1;
+  const varExp = values.map(v => 100 * v / total);
+  const scores = Xc.map(row => vectors.map(v => dot(row, v)));
+  return { mu, Xc, cov: C, eigVals: values, vectors, varExp, scores };
+}
+
+function jacobiEigenSym3(matrix) {
+  const A = matrix.map(row => row.slice());
+  const V = [[1,0,0], [0,1,0], [0,0,1]];
+  for (let iter = 0; iter < 60; iter++) {
+    let p = 0, q = 1;
+    let max = Math.abs(A[0][1]);
+    const pairs = [[0,2], [1,2]];
+    for (const [i,j] of pairs) {
+      const val = Math.abs(A[i][j]);
+      if (val > max) { max = val; p = i; q = j; }
+    }
+    if (max < 1e-12) break;
+
+    const app = A[p][p], aqq = A[q][q], apq = A[p][q];
+    const tau = (aqq - app) / (2 * apq);
+    const t = Math.sign(tau || 1) / (Math.abs(tau) + Math.sqrt(1 + tau*tau));
+    const c = 1 / Math.sqrt(1 + t*t);
+    const s = t * c;
+
+    A[p][p] = app - t * apq;
+    A[q][q] = aqq + t * apq;
+    A[p][q] = 0; A[q][p] = 0;
+
+    for (let k = 0; k < 3; k++) {
+      if (k !== p && k !== q) {
+        const akp = A[k][p];
+        const akq = A[k][q];
+        A[k][p] = c*akp - s*akq;
+        A[p][k] = A[k][p];
+        A[k][q] = s*akp + c*akq;
+        A[q][k] = A[k][q];
+      }
+    }
+
+    for (let k = 0; k < 3; k++) {
+      const vkp = V[k][p];
+      const vkq = V[k][q];
+      V[k][p] = c*vkp - s*vkq;
+      V[k][q] = s*vkp + c*vkq;
+    }
+  }
+  return { values: [A[0][0], A[1][1], A[2][2]], vectors: V };
+}
+
+function axisRange(values, pad = 1.15) {
+  let m = 1e-9;
+  for (const v of values) m = Math.max(m, Math.abs(v));
+  return [-m * pad, m * pad];
+}
+
+function dataRanges3D(X, projected) {
+  const all = X.concat(projected || []);
+  const ranges = [0,1,2].map(dim => {
+    const vals = all.map(row => row[dim]);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = Math.max(max - min, 1);
+    return [min - span*0.14, max + span*0.14];
+  });
+  return ranges;
+}
+
+function selectedState() {
+  return {
+    pc: Number(pcSlider.value) - 1,
+    pairIdx: Number(pairSelect.value),
+    pair: PAIRS[Number(pairSelect.value)]
+  };
+}
+
+function pct(n) { return Number(n).toFixed(1) + '%'; }
+function eigText(n) { return Number(n).toFixed(3); }
+
+function commonLayout(titleExtra = {}) {
+  return Object.assign({
+    paper_bgcolor: COL.paper,
+    plot_bgcolor: COL.plot,
+    font: { family: 'JetBrains Mono, monospace', color: COL.text, size: 11 },
+    margin: { l: 46, r: 20, t: 26, b: 42 },
+    showlegend: false
+  }, titleExtra);
+}
+
+function sceneAxes(ranges) {
+  return {
+    bgcolor: COL.plot,
+    xaxis: { title: 'x₁', color: COL.axis, gridcolor: COL.grid, zerolinecolor: COL.grid, range: ranges[0] },
+    yaxis: { title: 'x₂', color: COL.axis, gridcolor: COL.grid, zerolinecolor: COL.grid, range: ranges[1] },
+    zaxis: { title: 'x₃', color: COL.axis, gridcolor: COL.grid, zerolinecolor: COL.grid, range: ranges[2] },
+    aspectmode: 'cube',
+    camera: state.camera3d || { eye: { x: 1.45, y: 1.45, z: 0.95 } }
+  };
+}
+
+function drawAll() {
+  const pca = computePCA(state.data);
+  state.pca = pca;
+  const { pc, pair } = selectedState();
+  const [pa, pb] = pair;
+  const { Xc, vectors, eigVals, scores, varExp, mu } = pca;
+
+  document.getElementById('pcValue').textContent = `PC ${pc + 1}`;
+  document.getElementById('corrValue').textContent = `r = ${state.corr.toFixed(2)}`;
+  document.getElementById('pcSlider').style.setProperty('--pct', `${pc / 2 * 100}%`);
+  document.getElementById('corrSlider').style.setProperty('--pct', `${(state.corr - 0.05) / (0.97 - 0.05) * 100}%`);
+  document.getElementById('pairTitle').textContent = `PC${pa + 1} vs PC${pb + 1} Projection`;
+  document.getElementById('projectionBadge').textContent = `Highlighted: PC${pc + 1}`;
+
+  const projected = Xc.map(row => add(mu, scale(vectors[pc], dot(row, vectors[pc]))));
+  draw3D(projected);
+  draw2D();
+  drawVarianceBar();
+  drawCumulativeBar();
+
+  const cum = [varExp[0], varExp[0] + varExp[1], varExp[0] + varExp[1] + varExp[2]];
+  document.getElementById('info').innerHTML =
+    `N = ${N} pts &nbsp;|&nbsp; PC1: ${pct(varExp[0])} &nbsp; PC2: ${pct(varExp[1])} &nbsp; PC3: ${pct(varExp[2])}<br>` +
+    `Viewing PC${pa + 1} vs PC${pb + 1} &nbsp;|&nbsp; highlighted PC${pc + 1} (λ = ${eigText(eigVals[pc])}) &nbsp;|&nbsp; PC1+PC2 keeps ${pct(cum[1])}`;
+
+  const selectedInPair = pc === pa || pc === pb;
+  document.getElementById('explain').innerHTML = selectedInPair
+    ? `<b>What this shows:</b> The yellow points are each data point projected onto <b>PC${pc + 1}</b>. In the 2D view, the faint yellow lines show what information is lost when keeping only that selected principal direction. PC1 is usually longest because it captures the largest variance.`
+    : `<b>What this shows:</b> <b>PC${pc + 1}</b> is highlighted in the 3D plot and bar chart, but it is not one of the axes in the current 2D view. Change the pair selector to include PC${pc + 1} to see its projection lines in the right panel.`;
+}
+
+function draw3D(projected) {
+  const { pc } = selectedState();
+  const pca = state.pca;
+  const X = state.data;
+  const ranges = dataRanges3D(X, projected);
+  const traces = [];
+
+  traces.push({
+    type: 'scatter3d',
+    mode: 'markers',
+    name: 'Data cloud',
+    x: X.map(d => d[0]), y: X.map(d => d[1]), z: X.map(d => d[2]),
+    marker: { size: 4, color: COL.pt, line: { width: 0 } },
+    hovertemplate: 'x₁=%{x:.2f}<br>x₂=%{y:.2f}<br>x₃=%{z:.2f}<extra>Data</extra>'
+  });
+
+  traces.push({
+    type: 'scatter3d',
+    mode: 'markers',
+    name: `Projected onto PC${pc + 1}`,
+    x: projected.map(d => d[0]), y: projected.map(d => d[1]), z: projected.map(d => d[2]),
+    marker: { size: 3.5, color: COL.proj, line: { width: 0 } },
+    hovertemplate: 'Projected point<extra></extra>'
+  });
+
+  for (let k = 0; k < 3; k++) {
+    const v = pca.vectors[k];
+    const len = 2.0 * Math.sqrt(Math.max(pca.eigVals[k], 0));
+    const end = add(pca.mu, scale(v, len));
+    const neg = add(pca.mu, scale(v, -len * 0.5));
+    traces.push({
+      type: 'scatter3d', mode: 'lines+markers', name: `PC${k + 1}`,
+      x: [neg[0], pca.mu[0], end[0]],
+      y: [neg[1], pca.mu[1], end[1]],
+      z: [neg[2], pca.mu[2], end[2]],
+      line: { color: PC_COLORS[k], width: k === pc ? 9 : 6, dash: 'solid' },
+      marker: { size: [1, 3, 5], color: PC_COLORS[k] },
+      hovertemplate: `PC${k + 1}<br>Variance: ${pct(pca.varExp[k])}<extra></extra>`
+    });
+    const label = add(pca.mu, scale(v, len * 1.18));
+    traces.push({
+      type: 'scatter3d', mode: 'text', showlegend: false,
+      x: [label[0]], y: [label[1]], z: [label[2]],
+      text: [`PC${k + 1}<br>${Math.round(pca.varExp[k])}%`],
+      textfont: { color: PC_COLORS[k], size: 12 },
+      hoverinfo: 'skip'
+    });
+  }
+
+  const layout = commonLayout({
+    margin: { l: 0, r: 0, t: 6, b: 0 },
+    scene: sceneAxes(ranges),
+    uirevision: 'keep-3d-camera'
+  });
+
+  Plotly.react('plot3d', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
+
+  const plot3d = document.getElementById('plot3d');
+  plot3d.on('plotly_relayout', ev => {
+    if (ev['scene.camera']) state.camera3d = ev['scene.camera'];
+  });
+}
+
+function draw2D() {
+  const { pc, pair } = selectedState();
+  const [pa, pb] = pair;
+  const pca = state.pca;
+  const scores = pca.scores;
+  const sa = scores.map(s => s[pa]);
+  const sb = scores.map(s => s[pb]);
+  const xr = axisRange(sa);
+  const yr = axisRange(sb);
+  const traces = [];
+
+  traces.push({
+    type: 'scattergl', mode: 'markers',
+    x: sa, y: sb,
+    marker: { size: 7, color: COL.pt },
+    hovertemplate: `PC${pa + 1}=%{x:.2f}<br>PC${pb + 1}=%{y:.2f}<extra>Score</extra>`
+  });
+
+  traces.push({
+    type: 'scatter', mode: 'lines',
+    x: xr, y: [0, 0],
+    line: { color: hexToRgba(PC_COLORS[pa], 0.7), width: 2 },
+    hoverinfo: 'skip'
+  });
+  traces.push({
+    type: 'scatter', mode: 'lines',
+    x: [0, 0], y: yr,
+    line: { color: hexToRgba(PC_COLORS[pb], 0.7), width: 2 },
+    hoverinfo: 'skip'
+  });
+
+  if (pc === pa) {
+    traces.push({
+      type: 'scattergl', mode: 'markers',
+      x: sa, y: sa.map(() => 0),
+      marker: { size: 6, color: COL.proj },
+      hovertemplate: `Projected onto PC${pc + 1}<extra></extra>`
+    });
+    const xLine = [], yLine = [];
+    for (let i = 0; i < sa.length; i++) {
+      xLine.push(sa[i], sa[i], null);
+      yLine.push(sb[i], 0, null);
+    }
+    traces.push({ type: 'scattergl', mode: 'lines', x: xLine, y: yLine, line: { color: 'rgba(255,210,56,0.12)', width: 1 }, hoverinfo: 'skip' });
+  } else if (pc === pb) {
+    traces.push({
+      type: 'scattergl', mode: 'markers',
+      x: sb.map(() => 0), y: sb,
+      marker: { size: 6, color: COL.proj },
+      hovertemplate: `Projected onto PC${pc + 1}<extra></extra>`
+    });
+    const xLine = [], yLine = [];
+    for (let i = 0; i < sa.length; i++) {
+      xLine.push(sa[i], 0, null);
+      yLine.push(sb[i], sb[i], null);
+    }
+    traces.push({ type: 'scattergl', mode: 'lines', x: xLine, y: yLine, line: { color: 'rgba(255,210,56,0.12)', width: 1 }, hoverinfo: 'skip' });
+  } else {
+    traces.push({
+      type: 'scatter', mode: 'text',
+      x: [xr[0] * 0.65], y: [yr[1] * 0.78],
+      text: [`PC${pc + 1} not in this view<br>Change X-Y pair`],
+      textfont: { color: COL.yellow, size: 13 },
+      hoverinfo: 'skip'
+    });
+  }
+
+  const layout = commonLayout({
+    margin: { l: 58, r: 22, t: 16, b: 58 },
+    xaxis: {
+      title: `PC${pa + 1} score (${pct(pca.varExp[pa])} variance)`,
+      color: COL.axis, gridcolor: COL.grid, zerolinecolor: COL.grid, range: xr,
+      titlefont: { color: PC_COLORS[pa] }
+    },
+    yaxis: {
+      title: `PC${pb + 1} score (${pct(pca.varExp[pb])} variance)`,
+      color: COL.axis, gridcolor: COL.grid, zerolinecolor: COL.grid, range: yr,
+      titlefont: { color: PC_COLORS[pb] }
+    },
+    annotations: [{
+      text: `${pct(pca.varExp[pa])} + ${pct(pca.varExp[pb])} = ${pct(pca.varExp[pa] + pca.varExp[pb])} variance`,
+      xref: 'paper', yref: 'paper', x: 0.5, y: 1.08, showarrow: false,
+      font: { color: COL.text, size: 12 }
+    }]
+  });
+  Plotly.react('plot2d', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+function drawVarianceBar() {
+  const { pc } = selectedState();
+  const pca = state.pca;
+  const colors = [COL.barBlue, COL.barBlue, COL.barBlue];
+  colors[pc] = COL.yellow;
+  const trace = {
+    type: 'bar',
+    x: ['PC1', 'PC2', 'PC3'],
+    y: pca.varExp,
+    marker: { color: colors },
+    text: pca.varExp.map(v => pct(v)),
+    textposition: 'outside',
+    cliponaxis: false,
+    hovertemplate: '%{x}<br>Variance: %{y:.1f}%<extra></extra>'
+  };
+  const layout = commonLayout({
+    margin: { l: 56, r: 22, t: 12, b: 42 },
+    yaxis: { title: 'Variance (%)', color: COL.axis, gridcolor: COL.grid, range: [0, 105], zerolinecolor: COL.grid },
+    xaxis: { color: COL.axis, gridcolor: COL.grid }
+  });
+  Plotly.react('barVar', [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+function drawCumulativeBar() {
+  const pca = state.pca;
+  const cumV = [pca.varExp[0], pca.varExp[0] + pca.varExp[1], 100];
+  const trace = {
+    type: 'bar',
+    x: ['k = 1', 'k = 2', 'k = 3'],
+    y: cumV,
+    marker: { color: [PC_COLORS[0], mixHex(PC_COLORS[0], PC_COLORS[1], 0.5), COL.green] },
+    text: cumV.map(v => pct(v)),
+    textposition: 'outside',
+    cliponaxis: false,
+    hovertemplate: '%{x}<br>Cumulative variance: %{y:.1f}%<extra></extra>'
+  };
+  const layout = commonLayout({
+    margin: { l: 56, r: 22, t: 12, b: 42 },
+    yaxis: { title: 'Cumulative (%)', color: COL.axis, gridcolor: COL.grid, range: [0, 108], zerolinecolor: COL.grid },
+    xaxis: { color: COL.axis, gridcolor: COL.grid },
+    shapes: [{
+      type: 'line', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 95, y1: 95,
+      line: { color: COL.red, width: 2, dash: 'dash' }
+    }],
+    annotations: [{
+      xref: 'paper', yref: 'y', x: 1, y: 95,
+      xanchor: 'right', yanchor: 'bottom', showarrow: false,
+      text: '95%', font: { color: COL.red, size: 11 }
+    }]
+  });
+  Plotly.react('barCum', [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function mixHex(a, b, t) {
+  const pa = [parseInt(a.slice(1,3),16), parseInt(a.slice(3,5),16), parseInt(a.slice(5,7),16)];
+  const pb = [parseInt(b.slice(1,3),16), parseInt(b.slice(3,5),16), parseInt(b.slice(5,7),16)];
+  const pc = pa.map((v, i) => Math.round(v*(1-t) + pb[i]*t));
+  return '#' + pc.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function regenerate() {
+  state.data = generateData(N, state.corr);
+  drawAll();
+}
+
+pairSelect.addEventListener('change', drawAll);
+pcSlider.addEventListener('input', drawAll);
+corrSlider.addEventListener('input', () => {
+  state.corr = Number(corrSlider.value);
+  regenerate();
+});
+regenBtn.addEventListener('click', regenerate);
+
+window.addEventListener('resize', () => {
+  Plotly.Plots.resize('plot3d');
+  Plotly.Plots.resize('plot2d');
+  Plotly.Plots.resize('barVar');
+  Plotly.Plots.resize('barCum');
+});
+
+// ─────────────────────────────────────────────
+// TUTORIAL ENGINE
+// ─────────────────────────────────────────────
+
+const STEPS = [
+  {
+    label: 'Step 1 — Zero Correlation',
+    title: 'Spherical Data: r = 0',
+    corr: 0.05, pc: 1, pair: 0,
+    text: `<b>Start here.</b> When correlation is nearly zero (r ≈ 0), the 250 data points form a <b>sphere</b> in 3D space. No single direction has more spread than another.<br><br>
+Look at the <b>Variance Explained</b> bar chart (bottom-left) — all three PCs share the variance almost equally (~33% each). PCA has nothing to "find" yet because the data has no preferred direction.<br><br>
+<span class="hi-yellow">Try rotating the 3D plot</span> — it looks the same from every angle. That's the key property of uncorrelated data.`,
+    hint: '↓ Tip: Drag the 3D plot to rotate it and confirm the sphere shape.'
+  },
+  {
+    label: 'Step 2 — Slight Elongation',
+    title: 'Adding Correlation: r = 0.4',
+    corr: 0.40, pc: 1, pair: 0,
+    text: `<b>Increasing r to 0.4</b> introduces moderate correlation between features. The sphere begins to stretch into an <b>ellipsoid</b>.<br><br>
+The <span style="color:var(--cyan);font-weight:700">cyan arrow (PC1)</span> now points along the longest axis of the ellipsoid — this is exactly what PCA does: it finds the direction of <b>maximum variance</b>.<br><br>
+Notice in the bar chart that <b>PC1 now captures more variance</b> than PC2 or PC3. The more elongated the shape, the more dominant PC1 becomes.`,
+    hint: '↓ Tip: Watch how the PC1 arrow (cyan) aligns with the long axis of the data cloud.'
+  },
+  {
+    label: 'Step 3 — Strong Correlation',
+    title: 'Cigar Shape: r = 0.75',
+    corr: 0.75, pc: 1, pair: 0,
+    text: `With r = 0.75, the data cloud becomes a <b>cigar shape</b>. The variance is now highly concentrated along one direction.<br><br>
+<b>PC1 (cyan) dominates</b> — it captures the majority of the total variance. PC2 and PC3 capture progressively smaller amounts in the orthogonal directions.<br><br>
+The <b>Cumulative Variance</b> chart (bottom-right) shows that keeping just <b>k = 2 components</b> already explains most of the data. Compare how close it is to the <span class="hi-red">95% red threshold</span>.`,
+    hint: '↓ Tip: Check the cumulative bar — does k=2 already cross 95%?'
+  },
+  {
+    label: 'Step 4 — Near-Linear Data',
+    title: 'Almost 1-D: r = 0.95',
+    corr: 0.95, pc: 1, pair: 0,
+    text: `At r = 0.95, the data is nearly <b>one-dimensional</b> — nearly all 250 points cluster tightly around a single line in 3D space.<br><br>
+<b>PC1 alone now explains over 90% of the variance.</b> The other two components capture only residual noise. This is the extreme case where <b>dimensionality reduction is most powerful</b> — you can represent 3D data with essentially 1 number per point and lose very little information.<br><br>
+In the 2D score plot (right), see how tightly the points cluster along the PC1 axis.`,
+    hint: '↓ Tip: In the 2D plot, notice how thin the point cloud is — nearly a line.'
+  },
+  {
+    label: 'Step 5 — Projection Lines',
+    title: 'What Gets Lost: Projecting onto PC2',
+    corr: 0.75, pc: 2, pair: 1,
+    text: `Now we highlight <b>PC2 (orange)</b> and view the <b>PC1 vs PC3</b> score plot.<br><br>
+The <span class="hi-yellow">yellow dots</span> on the horizontal axis show where each data point lands when projected onto PC2. The <span class="hi-yellow">faint yellow lines</span> connect each original point to its projection — these lines represent the <b>information discarded</b> when you keep only PC2.<br><br>
+<b>Shorter lines = less information lost.</b> Compare this to projecting onto PC1 (go back to Step 2 or 3) — PC1 projections have much shorter lines because it's the most informative direction.`,
+    hint: '↓ Tip: Change the "Highlight PC" slider to PC1 to compare projection line lengths.'
+  },
+  {
+    label: 'Step 6 — Choosing k',
+    title: 'How Many Components Do You Need?',
+    corr: 0.82, pc: 1, pair: 0,
+    text: `The final decision in PCA: <b>how many components (k) to keep?</b><br><br>
+The <b>Cumulative Variance</b> chart (bottom-right) is your guide. The <span class="hi-red">red dashed line at 95%</span> is a common threshold — if k=2 components already cross it, you can safely discard PC3 and reduce from 3D to 2D with less than 5% information loss.<br><br>
+At r = 0.82: <b>k=2 likely crosses 95%</b>, meaning PC3 is mostly noise. <b>This is the core idea of PCA</b> — find the minimum k that preserves the structure you care about.<br><br>
+<span class="hi-yellow">Now try Free Explore</span> to drag the correlation slider and watch how the required k changes live!`,
+    hint: '↓ Tip: Click "Free Explore" below and drag r from 0 to 0.97 — watch all four charts update.'
+  }
+];
+
+let tutStep = 0;
+let tutFree = false;
+
+const dotsEl    = document.getElementById('tutDots');
+const labelEl   = document.getElementById('tutLabel');
+const titleEl   = document.getElementById('tutTitle');
+const textEl    = document.getElementById('tutText');
+const nextBtn   = document.getElementById('nextBtn');
+const prevBtn   = document.getElementById('prevBtn');
+const freeBtn   = document.getElementById('freeBtn');
+const restartBtn= document.getElementById('restartBtn');
+const counterEl = document.getElementById('stepCounter');
+const hintEl    = document.getElementById('tutHint');
+const modePill  = document.getElementById('modePill');
+const controls  = document.querySelector('.controls');
+
+// Build dots
+STEPS.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'tut-dot';
+  d.title = STEPS[i].label;
+  d.addEventListener('click', () => { if (!tutFree) applyStep(i); });
+  dotsEl.appendChild(d);
+});
+
+function applyStep(idx) {
+  tutStep = idx;
+  const s = STEPS[idx];
+
+  // Animate values
+  animateSlider(corrSlider, s.corr, v => { state.corr = v; });
+  animateSlider(pcSlider, s.pc, () => {});
+  pairSelect.value = s.pair;
+
+  // Fade text
+  titleEl.style.opacity = '0';
+  textEl.style.opacity  = '0';
+  setTimeout(() => {
+    labelEl.textContent  = s.label;
+    titleEl.textContent  = s.title;
+    textEl.innerHTML     = s.text;
+    hintEl.innerHTML     = `<span>↓ Tip:</span> ${s.hint.replace('↓ Tip: ', '')}`;
+    titleEl.style.opacity = '1';
+    textEl.style.opacity  = '1';
+  }, 180);
+
+  // Update dots
+  Array.from(dotsEl.children).forEach((d, i) => {
+    d.className = 'tut-dot' + (i === idx ? ' active' : i < idx ? ' done' : '');
+  });
+
+  counterEl.textContent = `Step ${idx + 1} of ${STEPS.length}`;
+  prevBtn.disabled = (idx === 0);
+  nextBtn.textContent = idx === STEPS.length - 1 ? '✓ Done' : 'Next Step →';
+  nextBtn.disabled = false;
+
+  setTimeout(() => {
+    state.data = generateData(N, state.corr);
+    drawAll();
+  }, 200);
+}
+
+function animateSlider(slider, target, onUpdate) {
+  const start = Number(slider.value);
+  const end   = target;
+  const steps = 28;
+  let step = 0;
+  const interval = setInterval(() => {
+    step++;
+    const t = step / steps;
+    const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+    const v = start + (end - start) * ease;
+    slider.value = v;
+    const pct = ((v - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100).toFixed(1);
+    slider.style.setProperty('--pct', pct + '%');
+    onUpdate(v);
+    if (step >= steps) {
+      clearInterval(interval);
+      slider.value = end;
+      slider.style.setProperty('--pct', ((end - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100).toFixed(1) + '%');
+    }
+  }, 18);
+}
+
+function enterFreeMode() {
+  tutFree = true;
+  modePill.className = 'mode-pill free-mode';
+  modePill.textContent = 'FREE EXPLORE';
+  counterEl.textContent = 'All controls unlocked';
+  freeBtn.style.display = 'none';
+  restartBtn.style.display = '';
+  nextBtn.style.display = 'none';
+  prevBtn.style.display = 'none';
+  controls.className = 'controls controls-free';
+
+  titleEl.style.opacity = '0';
+  textEl.style.opacity  = '0';
+  setTimeout(() => {
+    labelEl.textContent = 'Free Explore Mode';
+    titleEl.textContent = 'Experiment Freely';
+    textEl.innerHTML = `All controls are now unlocked. Try dragging the <b>Correlation slider</b> from 0 to 0.97 and watch how PCA adapts in real time.<br><br>
+Use <b>↻ New Data</b> to generate a fresh random dataset at the same correlation — PCA always finds the true principal directions regardless of the random rotation.<br><br>
+Switch between <b>PC1 vs PC2 / PC1 vs PC3 / PC2 vs PC3</b> pair views, and use the <b>Highlight PC</b> slider to see different projection lines. Each combination reveals a different aspect of the data structure.`;
+    titleEl.style.opacity = '1';
+    textEl.style.opacity  = '1';
+  }, 180);
+
+  hintEl.innerHTML = '<span>↓ Tip:</span> Hit "↺ Restart Tutorial" to go back to guided mode from the beginning.';
+  Array.from(dotsEl.children).forEach(d => d.className = 'tut-dot done');
+}
+
+function restartTutorial() {
+  tutFree = false;
+  modePill.className = 'mode-pill tutorial-mode';
+  modePill.textContent = 'TUTORIAL MODE';
+  freeBtn.style.display = '';
+  restartBtn.style.display = 'none';
+  nextBtn.style.display = '';
+  prevBtn.style.display = '';
+  controls.className = 'controls';
+  applyStep(0);
+}
+
+nextBtn.addEventListener('click', () => {
+  if (tutStep < STEPS.length - 1) applyStep(tutStep + 1);
+  else enterFreeMode();
+});
+prevBtn.addEventListener('click', () => {
+  if (tutStep > 0) applyStep(tutStep - 1);
+});
+freeBtn.addEventListener('click', enterFreeMode);
+restartBtn.addEventListener('click', restartTutorial);
+
+// Boot
+applyStep(0);
+</script>
+</body>
+</html>
