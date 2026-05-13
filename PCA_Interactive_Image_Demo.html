@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCA Image Compression — Interactive Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #070C14;
+    --surface:  #0E1520;
+    --border:   #1C2A3A;
+    --accent:   #00E5CC;
+    --accent2:  #FF6B35;
+    --text:     #D8E8F0;
+    --muted:    #5A7080;
+    --panel:    #0A1219;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+               font-family: 'JetBrains Mono', monospace; overflow-x: hidden; }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: repeating-linear-gradient(to bottom,
+      transparent, transparent 3px, rgba(0,0,0,.08) 3px, rgba(0,0,0,.08) 4px);
+  }
+
+  /* ── LAYOUT ── */
+  #app { max-width: 960px; margin: 0 auto; padding: 24px 16px 60px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  header { text-align: center; margin-bottom: 36px; }
+  .tag  { font-size: 10px; letter-spacing: 4px; color: var(--accent); text-transform: uppercase;
+          margin-bottom: 6px; }
+  h1    { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 6vw, 4rem);
+          letter-spacing: 3px; line-height: 1;
+          background: linear-gradient(135deg, #00E5CC, #00A8FF 50%, #FF6B35);
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { font-size: 11px; color: var(--muted); margin-top: 8px; letter-spacing: 1px; }
+
+  /* ── UPLOAD ZONE ── */
+  #upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 0; text-align: center;
+    transition: border-color .2s; position: relative; overflow: hidden;
+  }
+  #upload-zone.drag-over { border-color: var(--accent); background: rgba(0,229,204,.02); }
+  #upload-click-area {
+    padding: 44px 20px 28px; cursor: pointer;
+    transition: background .2s; position: relative;
+  }
+  #upload-click-area:hover { background: rgba(0,229,204,.04); }
+  #upload-click-area::before {
+    content: ''; position: absolute; inset: 0; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(0,229,204,.07), transparent 70%);
+    transition: opacity .3s;
+  }
+  #upload-click-area:hover::before { opacity: 1; }
+  .upload-btns {
+    padding: 0 20px 24px; display: flex; justify-content: center; gap: 10px;
+    border-top: 1px solid var(--border); padding-top: 18px; margin-top: 0;
+  }
+  .upload-icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-title { font-family: 'Bebas Neue'; font-size: 1.4rem; letter-spacing: 2px;
+                  color: var(--text); }
+  .upload-sub   { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  #file-input   { display: none; }
+  .btn {
+    display: inline-block; padding: 10px 24px;
+    border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 6px; font: 500 11px 'JetBrains Mono'; letter-spacing: 1.5px;
+    cursor: pointer; background: transparent; text-transform: uppercase;
+    transition: background .2s, color .2s;
+  }
+  .btn:hover { background: var(--accent); color: var(--bg); }
+  .btn-sample {
+    border-color: var(--accent2); color: var(--accent2); margin-left: 10px;
+  }
+  .btn-sample:hover { background: var(--accent2); color: var(--bg); }
+
+  /* ── LOADING ── */
+  #loading-overlay {
+    display: none; background: var(--surface); border-radius: 12px;
+    padding: 48px; text-align: center; margin: 20px 0;
+  }
+  .loading-title { font-family: 'Bebas Neue'; font-size: 1.8rem; letter-spacing: 3px;
+                   color: var(--accent); margin-bottom: 16px; }
+  .progress-bar  { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #00A8FF);
+                   transition: width .1s; border-radius: 2px; }
+  .loading-pct   { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  /* ── DEMO PANEL ── */
+  #demo-panel { display: none; }
+
+  /* ── IMAGE PANELS ── */
+  .panels-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .img-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+               overflow: hidden; }
+  .img-panel .p-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+  }
+  .p-label { font-family: 'Bebas Neue'; font-size: 1rem; letter-spacing: 2px; color: var(--muted); }
+  .p-label.active { color: var(--accent); }
+  .p-badge { font-size: 9px; background: rgba(0,229,204,.1); color: var(--accent);
+             border: 1px solid rgba(0,229,204,.3); border-radius: 4px; padding: 2px 8px;
+             letter-spacing: 1px; }
+  .canvas-wrap { display: flex; justify-content: center; align-items: center; padding: 12px;
+                 aspect-ratio: 1; }
+  .canvas-wrap canvas { width: 100%; height: 100%; image-rendering: auto; border-radius: 4px; }
+
+  /* ── STATS ROW ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .stat-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .stat-label { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .stat-value { font-family: 'Bebas Neue'; font-size: 1.6rem; letter-spacing: 1px;
+                margin-top: 2px; color: var(--text); }
+  .stat-value.hi { color: var(--accent); }
+  .stat-unit  { font-size: 9px; color: var(--muted); }
+
+  /* ── SLIDER SECTION ── */
+  .slider-section { background: var(--surface); border: 1px solid var(--border);
+                    border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: baseline;
+                   margin-bottom: 14px; }
+  .slider-title { font-family: 'Bebas Neue'; font-size: 1rem; letter-spacing: 2px; color: var(--muted); }
+  .slider-count { font-size: 11px; color: var(--accent); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 2px; outline: none; cursor: pointer;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct, 0%), var(--border) var(--pct, 0%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 10px rgba(0,229,204,.5);
+    border: 2px solid var(--bg); cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg); cursor: pointer;
+  }
+  .slider-ticks { display: flex; justify-content: space-between;
+                  font-size: 9px; color: var(--muted); margin-top: 6px; }
+
+  /* ── CHART SECTION ── */
+  .chart-section { background: var(--surface); border: 1px solid var(--border);
+                   border-radius: 10px; padding: 18px 20px; margin-bottom: 20px; }
+  .chart-title { font-family: 'Bebas Neue'; font-size: .9rem; letter-spacing: 2px;
+                 color: var(--muted); margin-bottom: 12px; }
+  #variance-chart { width: 100%; display: block; }
+
+  /* ── EXPLANATION PANEL ── */
+  .explainer { background: var(--surface); border: 1px solid var(--border);
+               border-left: 3px solid var(--accent); border-radius: 10px;
+               padding: 20px 22px; font-size: 11px; line-height: 1.8; color: var(--text); }
+  .explainer .ex-title { font-family: 'Bebas Neue'; font-size: 1.1rem; letter-spacing: 2px;
+                         color: var(--accent); margin-bottom: 8px; }
+  #dynamic-explain { color: var(--text); transition: all .3s; }
+  .accent-word { color: var(--accent); font-weight: 700; }
+  .accent2-word { color: var(--accent2); font-weight: 700; }
+
+  /* ── RESET BTN ── */
+  .reset-row { text-align: center; margin-top: 28px; }
+  .btn-reset { border-color: var(--muted); color: var(--muted); }
+  .btn-reset:hover { background: var(--muted); color: var(--bg); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 580px) {
+    .panels-row { grid-template-columns: 1fr; }
+    .stats-row  { grid-template-columns: repeat(2, 1fr); }
+    h1 { font-size: 2.2rem; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- HEADER -->
+  <header>
+    <div class="tag">ANN Course Project · Interactive Demo</div>
+    <h1>PCA Image Compression</h1>
+    <div class="subtitle">Drag the slider to see how many principal components are needed to reconstruct a full-color image</div>
+  </header>
+
+  <!-- UPLOAD ZONE -->
+  <div id="upload-zone"
+       ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+    <div id="upload-click-area" onclick="document.getElementById('file-input').click()">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-title">Drop an image here or click to upload</div>
+      <div class="upload-sub">RGB/color image formats supported · Best with portraits or images with clear structure</div>
+    </div>
+    <div class="upload-btns">
+      <button class="btn" onclick="document.getElementById('file-input').click()">
+        Choose File
+      </button>
+      <button class="btn btn-sample" onclick="loadSampleImage()">
+        Use Sample Image
+      </button>
+    </div>
+    <input type="file" id="file-input" accept="image/*" onchange="onFileSelect(event)">
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading-overlay">
+    <div class="loading-title">Computing RGB Principal Components</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="loading-pct" id="loading-pct">0%</div>
+  </div>
+
+  <!-- DEMO PANEL -->
+  <div id="demo-panel">
+    <!-- Images -->
+    <div class="panels-row">
+      <div class="img-panel">
+        <div class="p-header">
+          <span class="p-label">Original</span>
+          <span class="p-badge">SOURCE IMAGE</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="original-canvas"></canvas></div>
+      </div>
+      <div class="img-panel">
+        <div class="p-header">
+          <span class="p-label active" id="rec-label">Reconstructed</span>
+          <span class="p-badge" id="rec-badge" style="border-color:rgba(255,107,53,.4);color:#FF6B35;background:rgba(255,107,53,.1)">k = 1</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="rec-canvas"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">Components</div>
+        <div class="stat-value hi" id="stat-k">1</div>
+        <div class="stat-unit">of <span id="stat-maxk">100</span> total</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Variance Explained</div>
+        <div class="stat-value" id="stat-var">—</div>
+        <div class="stat-unit">of total variance</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Compression</div>
+        <div class="stat-value" id="stat-ratio">—</div>
+        <div class="stat-unit">size reduction ratio</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">PSNR Quality</div>
+        <div class="stat-value" id="stat-psnr">—</div>
+        <div class="stat-unit">dB (higher = better)</div>
+      </div>
+    </div>
+
+    <!-- Slider -->
+    <div class="slider-section">
+      <div class="slider-header">
+        <span class="slider-title">Number of Principal Components (k)</span>
+        <span class="slider-count" id="slider-count">k = 1</span>
+      </div>
+      <input type="range" id="slider" min="1" max="100" value="1" oninput="onSlider(this)">
+      <div class="slider-ticks">
+        <span id="tick-1">1</span><span id="tick-25">25</span><span id="tick-50">50</span><span id="tick-75">75</span><span id="tick-max">100</span>
+      </div>
+    </div>
+
+    <!-- Variance Chart -->
+    <div class="chart-section">
+      <div class="chart-title">Combined RGB Cumulative Variance Explained vs. Number of Components</div>
+      <canvas id="variance-chart" height="130"></canvas>
+    </div>
+
+    <!-- Explainer -->
+    <div class="explainer">
+      <div class="ex-title">What's happening?</div>
+      <div id="dynamic-explain">Loading explanation...</div>
+    </div>
+
+    <!-- Reset -->
+    <div class="reset-row">
+      <button class="btn btn-reset" onclick="resetDemo()">↩ Load a Different Image</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════
+const N = 128; // internal PCA resolution (128 x 128). Increase for sharper PCA, decrease for speed.
+const DISPLAY = 300; // canvas display pixels
+
+// ═══════════════════════════════════════════════════════════════════
+//  GLOBAL STATE
+// ═══════════════════════════════════════════════════════════════════
+let S = {
+  // PCA is now computed independently for each color channel.
+  // models[c] contains { eigenvectors, eigenvalues, scores, means, totalVar } for R/G/B.
+  models       : null,
+  channelCount : 3,
+  originalPx   : null,   // Float32Array[N×N×3] — RGB [0,1]
+  sourceImage  : null,   // original uploaded image/canvas, drawn directly in the Original panel
+  cumVar       : null,   // Float32Array[N]     — weighted cumulative variance across RGB
+  totalVar     : 0,
+  maxK         : N,
+  currentK     : 1,
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  SAMPLE IMAGE GENERATOR — draws a simple face
+// ═══════════════════════════════════════════════════════════════════
+function generateSampleImage() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 300;
+  const ctx = c.getContext('2d');
+
+  // sky-ish background gradient
+  const bg = ctx.createLinearGradient(0, 0, 0, 300);
+  bg.addColorStop(0, '#aad4e8'); bg.addColorStop(1, '#d0e8c0');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 300, 300);
+
+  // neck
+  ctx.fillStyle = '#d4956a';
+  ctx.fillRect(120, 210, 60, 70);
+
+  // shoulders / collar
+  ctx.fillStyle = '#2a4a8a';
+  ctx.beginPath(); ctx.moveTo(60,300); ctx.lineTo(240,300);
+  ctx.lineTo(220,230); ctx.lineTo(80,230); ctx.closePath(); ctx.fill();
+  // collar triangle
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.moveTo(130,230); ctx.lineTo(170,230); ctx.lineTo(150,270); ctx.closePath(); ctx.fill();
+
+  // hair
+  ctx.fillStyle = '#3a2010';
+  ctx.beginPath(); ctx.arc(150,135,90,Math.PI,2*Math.PI); ctx.fill();
+  ctx.fillRect(60,105,180,50);
+
+  // face
+  ctx.fillStyle = '#e8a87c';
+  ctx.beginPath(); ctx.ellipse(150,155,70,85,0,0,2*Math.PI); ctx.fill();
+
+  // ears
+  [70,230].forEach(x => {
+    ctx.fillStyle = '#d4956a';
+    ctx.beginPath(); ctx.ellipse(x,155,12,18,0,0,2*Math.PI); ctx.fill();
+  });
+
+  // eyebrows
+  ctx.strokeStyle = '#3a2010'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  [[105,115,130,112],[170,112,195,115]].forEach(([x1,y1,x2,y2]) => {
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  });
+
+  // eyes — white
+  [[115,135],[185,135]].forEach(([cx,cy]) => {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(cx,cy,14,10,0,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx,cy,14,10,0,0,2*Math.PI); ctx.stroke();
+  });
+  // irises
+  [[115,135,'#2255aa'],[185,135,'#2255aa']].forEach(([cx,cy,col]) => {
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(cx,cy,7,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx,cy,4,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(cx-2,cy-2,2,0,2*Math.PI); ctx.fill();
+  });
+
+  // nose
+  ctx.strokeStyle = '#b87050'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(150,145); ctx.lineTo(143,170); ctx.lineTo(157,170); ctx.stroke();
+
+  // lips
+  ctx.fillStyle = '#c06060';
+  ctx.beginPath(); ctx.ellipse(150,185,22,10,0,0,Math.PI); ctx.fill();
+  ctx.fillStyle = '#a04545';
+  ctx.beginPath(); ctx.ellipse(150,183,22,6,0,Math.PI,2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#7a2020'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(128,185); ctx.lineTo(172,185); ctx.stroke();
+
+  // subtle chin/jaw highlight
+  ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(150,155,68,0.2*Math.PI,0.8*Math.PI); ctx.stroke();
+
+  return c;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  IMAGE PROCESSING
+// ═══════════════════════════════════════════════════════════════════
+function getSourceSize(imgEl) {
+  return {
+    w: imgEl.naturalWidth || imgEl.videoWidth || imgEl.width,
+    h: imgEl.naturalHeight || imgEl.videoHeight || imgEl.height,
+  };
+}
+
+function drawContainedImage(ctx, imgEl, targetW, targetH) {
+  const { w, h } = getSourceSize(imgEl);
+  const scale = Math.min(targetW / w, targetH / h);
+  const drawW = Math.max(1, Math.round(w * scale));
+  const drawH = Math.max(1, Math.round(h * scale));
+  const dx = Math.floor((targetW - drawW) / 2);
+  const dy = Math.floor((targetH - drawH) / 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, targetW, targetH);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(imgEl, dx, dy, drawW, drawH);
+}
+
+function imageToRGB(imgEl) {
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const ctx = c.getContext('2d');
+
+  // Preserve aspect ratio instead of stretching the uploaded photo into a square.
+  // The PCA still runs on an N x N working copy, but letterboxes non-square photos.
+  drawContainedImage(ctx, imgEl, N, N);
+
+  const id = ctx.getImageData(0, 0, N, N);
+  const px = new Float32Array(N * N * 3);
+  for (let i = 0; i < N * N; i++) {
+    px[i*3]   = id.data[i*4]   / 255; // R
+    px[i*3+1] = id.data[i*4+1] / 255; // G
+    px[i*3+2] = id.data[i*4+2] / 255; // B
+  }
+  return px;
+}
+
+function splitRGB(rgbPx) {
+  const channels = [new Float32Array(N * N), new Float32Array(N * N), new Float32Array(N * N)];
+  for (let i = 0; i < N * N; i++) {
+    channels[0][i] = rgbPx[i*3];
+    channels[1][i] = rgbPx[i*3+1];
+    channels[2][i] = rgbPx[i*3+2];
+  }
+  return channels;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  PCA MATH
+// ═══════════════════════════════════════════════════════════════════
+function computeMeans(X) {
+  const m = new Float32Array(N);
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      m[j] += X[i*N+j];
+  for (let j = 0; j < N; j++) m[j] /= N;
+  return m;
+}
+
+function centerData(X, means) {
+  const Xc = new Float32Array(N * N);
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      Xc[i*N+j] = X[i*N+j] - means[j];
+  return Xc;
+}
+
+function computeCovariance(Xc) {
+  // C = Xc^T * Xc / (N-1),  shape N×N
+  const C = new Float32Array(N * N);
+  const inv = 1 / (N - 1);
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < N; k++) {
+      const a = Xc[i*N+k];
+      if (a === 0) continue;
+      for (let j = k; j < N; j++) {   // exploit symmetry
+        const v = a * Xc[i*N+j] * inv;
+        C[k*N+j] += v;
+        if (j !== k) C[j*N+k] += v;
+      }
+    }
+  }
+  return C;
+}
+
+function powerIter(C, numIter) {
+  let v = new Float32Array(N);
+  for (let i = 0; i < N; i++) v[i] = Math.random() - 0.5;
+  let norm = 0;
+  for (let i = 0; i < N; i++) norm += v[i]*v[i];
+  norm = Math.sqrt(norm);
+  for (let i = 0; i < N; i++) v[i] /= norm;
+
+  for (let it = 0; it < numIter; it++) {
+    const Cv = new Float32Array(N);
+    for (let i = 0; i < N; i++)
+      for (let j = 0; j < N; j++)
+        Cv[i] += C[i*N+j] * v[j];
+    norm = 0;
+    for (let i = 0; i < N; i++) norm += Cv[i]*Cv[i];
+    norm = Math.sqrt(norm);
+    if (norm < 1e-12) break;
+    v = Cv;
+    for (let i = 0; i < N; i++) v[i] /= norm;
+  }
+  let lambda = 0;
+  for (let i = 0; i < N; i++) {
+    let cv = 0;
+    for (let j = 0; j < N; j++) cv += C[i*N+j]*v[j];
+    lambda += v[i]*cv;
+  }
+  return { v, lambda: Math.max(0, lambda) };
+}
+
+function deflate(C, v, lambda) {
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      C[i*N+j] -= lambda * v[i] * v[j];
+}
+
+async function runPCA(Xc, C, onProgress) {
+  const eigenvectors = [];
+  const eigenvalues  = [];
+  const Cw = C.slice();
+
+  for (let comp = 0; comp < N; comp++) {
+    const { v, lambda } = powerIter(Cw, 60);
+    eigenvectors.push(v);
+    eigenvalues.push(lambda);
+    deflate(Cw, v, lambda);
+    onProgress((comp + 1) / N);
+    if ((comp + 1) % 8 === 0)
+      await new Promise(r => setTimeout(r, 0));
+  }
+
+  // Precompute all scores: S[i*N + m] = sum_j Xc[i*N+j] * eigenvectors[m][j]
+  const scores = new Float32Array(N * N);
+  for (let i = 0; i < N; i++)
+    for (let m = 0; m < N; m++) {
+      let s = 0;
+      for (let j = 0; j < N; j++) s += Xc[i*N+j] * eigenvectors[m][j];
+      scores[i*N+m] = s;
+    }
+
+  // Cumulative variance for this one channel.
+  const totalVar = eigenvalues.reduce((a, b) => a + b, 0);
+  const cumVar = new Float32Array(N);
+  let acc = 0;
+  for (let m = 0; m < N; m++) {
+    acc += eigenvalues[m];
+    cumVar[m] = totalVar > 1e-12 ? acc / totalVar : 1;
+  }
+
+  return { eigenvectors, eigenvalues: new Float32Array(eigenvalues), scores, cumVar, totalVar };
+}
+
+async function runRGBPCA(rgbPx, onProgress) {
+  const channelNames = ['red', 'green', 'blue'];
+  const channels = splitRGB(rgbPx);
+  const models = [];
+  let totalVar = 0;
+
+  for (let c = 0; c < 3; c++) {
+    const means = computeMeans(channels[c]);
+    const Xc = centerData(channels[c], means);
+    const C  = computeCovariance(Xc);
+    const model = await runPCA(Xc, C, pct => {
+      onProgress((c + pct) / 3, channelNames[c]);
+    });
+    model.means = means;
+    models.push(model);
+    totalVar += model.totalVar;
+  }
+
+  // Weighted cumulative variance across all channels for the shared k slider.
+  const cumVar = new Float32Array(N);
+  for (let k = 1; k <= N; k++) {
+    let acc = 0;
+    for (const model of models)
+      for (let m = 0; m < k; m++) acc += model.eigenvalues[m];
+    cumVar[k-1] = totalVar > 1e-12 ? acc / totalVar : 1;
+  }
+
+  return { models, cumVar, totalVar };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RECONSTRUCTION
+// ═══════════════════════════════════════════════════════════════════
+function reconstruct(k) {
+  const Xr = new Float32Array(N * N * 3);
+
+  for (let c = 0; c < 3; c++) {
+    const { eigenvectors, scores, means } = S.models[c];
+    for (let i = 0; i < N; i++)
+      for (let j = 0; j < N; j++) {
+        let val = means[j];
+        for (let m = 0; m < k; m++) val += scores[i*N+m] * eigenvectors[m][j];
+        Xr[(i*N+j)*3+c] = Math.max(0, Math.min(1, val));
+      }
+  }
+
+  return Xr;
+}
+
+function computePSNR(orig, rec) {
+  let mse = 0;
+  for (let i = 0; i < orig.length; i++) { const d = orig[i] - rec[i]; mse += d*d; }
+  mse /= orig.length;
+  if (mse < 1e-10) return 99.9;
+  return 10 * Math.log10(1 / mse);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════════════════════════════════
+function drawOriginalImage(canvasId, imgEl) {
+  const canvas = document.getElementById(canvasId);
+  canvas.width = canvas.height = DISPLAY;
+  const ctx = canvas.getContext('2d');
+  drawContainedImage(ctx, imgEl, DISPLAY, DISPLAY);
+}
+
+function drawPixels(canvasId, px) {
+  const canvas = document.getElementById(canvasId);
+  canvas.width = canvas.height = DISPLAY;
+  const ctx = canvas.getContext('2d');
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = N;
+  const tc  = tmp.getContext('2d');
+  const id  = tc.createImageData(N, N);
+  const isRGB = px.length === N * N * 3;
+
+  for (let i = 0; i < N*N; i++) {
+    if (isRGB) {
+      id.data[i*4]   = Math.round(px[i*3]   * 255);
+      id.data[i*4+1] = Math.round(px[i*3+1] * 255);
+      id.data[i*4+2] = Math.round(px[i*3+2] * 255);
+    } else {
+      // Backward-compatible fallback for any old grayscale arrays.
+      const v = Math.round(px[i] * 255);
+      id.data[i*4] = v; id.data[i*4+1] = v; id.data[i*4+2] = v;
+    }
+    id.data[i*4+3] = 255;
+  }
+
+  tc.putImageData(id, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(tmp, 0, 0, DISPLAY, DISPLAY);
+}
+
+function drawVarianceChart(cumVar, currentK) {
+  const canvas = document.getElementById('variance-chart');
+  const W = canvas.parentElement.clientWidth - 40;
+  const H = 130;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = { t: 10, r: 10, b: 28, l: 44 };
+  const iW = W - PAD.l - PAD.r;
+  const iH = H - PAD.t - PAD.b;
+
+  const xOf = i => PAD.l + (i / (N-1)) * iW;
+  const yOf = v => PAD.t + (1-v) * iH;
+
+  // grid lines
+  ctx.strokeStyle = '#1C2A3A'; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 0.90, 1.0].forEach(v => {
+    const y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l+iW, y); ctx.stroke();
+    ctx.fillStyle = '#5A7080'; ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'right';
+    ctx.fillText((v*100).toFixed(0)+'%', PAD.l-4, y+3);
+  });
+
+  // shaded area under curve up to currentK
+  const grad = ctx.createLinearGradient(0, PAD.t, 0, PAD.t+iH);
+  grad.addColorStop(0, 'rgba(0,229,204,.25)');
+  grad.addColorStop(1, 'rgba(0,229,204,.03)');
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(0));
+  for (let i = 0; i <= currentK-1 && i < N; i++) ctx.lineTo(xOf(i), yOf(cumVar[i]));
+  ctx.lineTo(xOf(Math.min(currentK-1, N-1)), yOf(0));
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+  // full curve (muted)
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(cumVar[0]));
+  for (let i = 1; i < N; i++) ctx.lineTo(xOf(i), yOf(cumVar[i]));
+  ctx.strokeStyle = 'rgba(0,229,204,.2)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // curve up to currentK (bright)
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(cumVar[0]));
+  for (let i = 1; i < currentK; i++) ctx.lineTo(xOf(i), yOf(cumVar[i]));
+  ctx.strokeStyle = '#00E5CC'; ctx.lineWidth = 2.5; ctx.stroke();
+
+  // 90% threshold line
+  const idx90 = cumVar.findIndex(v => v >= 0.90);
+  if (idx90 >= 0) {
+    ctx.setLineDash([4,3]);
+    ctx.strokeStyle = 'rgba(255,107,53,.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(idx90), PAD.t); ctx.lineTo(xOf(idx90), PAD.t+iH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#FF6B35'; ctx.font = '8px JetBrains Mono'; ctx.textAlign = 'left';
+    ctx.fillText('90% @ k='+(idx90+1), xOf(idx90)+3, PAD.t+12);
+  }
+
+  // current k marker (dot on curve)
+  const kIdx = Math.min(currentK-1, N-1);
+  ctx.beginPath();
+  ctx.arc(xOf(kIdx), yOf(cumVar[kIdx]), 5, 0, 2*Math.PI);
+  ctx.fillStyle = '#00E5CC'; ctx.fill();
+
+  // x-axis label
+  ctx.fillStyle = '#5A7080'; ctx.font = '9px JetBrains Mono'; ctx.textAlign = 'center';
+  const tickVals = [1, Math.round(N*0.25), Math.round(N*0.5), Math.round(N*0.75), N];
+  tickVals.forEach(v => ctx.fillText(v, xOf(v-1), H - 6));
+  ctx.fillText('Number of Components (k)', PAD.l + iW/2, H);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UI UPDATES
+// ═══════════════════════════════════════════════════════════════════
+function updateStats(k) {
+  const varPct = (S.cumVar[k-1] * 100).toFixed(1);
+  // RGB compression ratio: original = 3N² values; compressed = 3 × (scores + eigenvectors + means)
+  const originalValues = S.channelCount * N * N;
+  const compressedValues = S.channelCount * (k*N + k*N + N);
+  const ratio  = (originalValues / compressedValues).toFixed(2);
+  const rec    = reconstruct(k);
+  const psnr   = computePSNR(S.originalPx, rec).toFixed(1);
+
+  document.getElementById('stat-k').textContent    = k;
+  document.getElementById('stat-var').textContent  = varPct + '%';
+  document.getElementById('stat-ratio').textContent= ratio + '×';
+  document.getElementById('stat-psnr').textContent = psnr;
+  document.getElementById('rec-badge').textContent = 'k = ' + k;
+  document.getElementById('slider-count').textContent = 'k = ' + k;
+  document.getElementById('stat-maxk').textContent = N;
+
+  // colour variance based on quality
+  const varEl = document.getElementById('stat-var');
+  varEl.style.color = +varPct >= 90 ? '#00E5CC' : +varPct >= 70 ? '#F5A623' : '#FF6B35';
+
+  drawPixels('rec-canvas', rec);
+  drawVarianceChart(S.cumVar, k);
+
+  // update slider gradient
+  const pct = ((k-1)/(N-1)*100).toFixed(1);
+  document.getElementById('slider').style.setProperty('--pct', pct + '%');
+
+  updateExplainer(k, +varPct, +psnr, +ratio);
+  S.currentK = k;
+}
+
+function updateExplainer(k, varPct, psnr, ratio) {
+  let msg = '';
+  const idx90 = Array.from(S.cumVar).findIndex(v => v >= 0.90) + 1;
+  const idx99 = Array.from(S.cumVar).findIndex(v => v >= 0.99) + 1;
+
+  if (k > idx99) {
+    // Beyond 99% — check first so it isn't swallowed by k<=10 on simple images
+    msg = `At <span class="accent-word">k = ${k}</span> (${varPct}% combined RGB variance, PSNR = ${psnr} dB), the reconstruction is nearly indistinguishable from the original. The remaining components captured very subtle color noise and texture. Beyond k = ${idx99} (99% threshold), adding more components is diminishing returns — this is why PCA is so powerful for compression.`;
+  } else if (k >= idx90) {
+    // Sweet-spot: at or past 90% — must come before the generic k<=10 guard
+    msg = `Excellent — <span class="accent-word">k = ${k}</span> captures <span class="accent-word">${varPct}%</span> of combined RGB variance (PSNR = ${psnr} dB). You've passed the <span class="accent2-word">90% threshold</span> — this is the sweet spot for compression: using only ${idx90} out of ${N} components per channel while losing almost no perceptual quality. Compression ratio: <span class="accent2-word">${ratio}×</span>.`;
+  } else if (k <= 3) {
+    msg = `With only <span class="accent-word">k = ${k}</span> component${k>1?'s':''} per RGB channel, PCA captures the most dominant global structure — broad color and brightness gradients across the image. The reconstruction captures <span class="accent-word">${varPct}%</span> of combined RGB variance. Individual features (eyes, edges, textures) are still faint. The data footprint is <span class="accent2-word">${ratio}× smaller</span> than the original.`;
+  } else if (k <= 10) {
+    msg = `With <span class="accent-word">k = ${k}</span> components per channel (<span class="accent-word">${varPct}%</span> combined RGB variance), major structural regions are emerging — you can see rough outlines and approximate colors. Each new component adds an orthogonal "layer" of information inside the red, green, and blue channels.`;
+  } else if (varPct < 70) {
+    msg = `At <span class="accent-word">k = ${k}</span> (<span class="accent-word">${varPct}%</span> combined RGB variance), coarser color features are visible but fine detail is still missing. In PCA, the eigenvectors are ordered by variance — early ones capture global structure while later ones capture progressively finer local color detail.`;
+  } else {
+    msg = `<span class="accent-word">k = ${k}</span> explains <span class="accent-word">${varPct}%</span> of combined RGB variance. The color image is becoming recognizable. The <span class="accent2-word">orange dashed line</span> on the chart marks where 90% of variance is reached (k = ${idx90}). Notice how adding components beyond the "elbow" gives diminishing visual returns.`;
+  }
+  document.getElementById('dynamic-explain').innerHTML = msg;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAIN PIPELINE
+// ═══════════════════════════════════════════════════════════════════
+async function startPCA(imgSource) {
+  // show loading
+  document.getElementById('upload-zone').style.display  = 'none';
+  document.getElementById('demo-panel').style.display   = 'none';
+  document.getElementById('loading-overlay').style.display = 'block';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('loading-pct').textContent = '0%';
+
+  await new Promise(r => setTimeout(r, 60)); // let DOM update
+
+  const px = imageToRGB(imgSource);
+  S.originalPx = px;
+  S.sourceImage = imgSource;
+
+  const { models, cumVar, totalVar } =
+    await runRGBPCA(px, (pct, channelName) => {
+      document.getElementById('progress-fill').style.width = (pct*100).toFixed(0) + '%';
+      document.getElementById('loading-pct').textContent   = (pct*100).toFixed(0) + '% · ' + channelName.toUpperCase();
+    });
+
+  S.models       = models;
+  S.cumVar       = cumVar;
+  S.totalVar     = totalVar;
+  S.maxK         = N;
+  S.channelCount = 3;
+
+  // Draw the true source image directly, not the downsampled PCA working copy.
+  drawOriginalImage('original-canvas', imgSource);
+
+  // Set up slider
+  const slider = document.getElementById('slider');
+  slider.max   = N;
+  slider.value = 1;
+  document.getElementById('tick-25').textContent = Math.round(N * 0.25);
+  document.getElementById('tick-50').textContent = Math.round(N * 0.50);
+  document.getElementById('tick-75').textContent = Math.round(N * 0.75);
+  document.getElementById('tick-max').textContent = N;
+
+  // Show demo panel
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('demo-panel').style.display      = 'block';
+
+  updateStats(1);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  EVENT HANDLERS
+// ═══════════════════════════════════════════════════════════════════
+function onSlider(el) {
+  updateStats(+el.value);
+}
+
+function onFileSelect(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const img  = new Image();
+  img.onload = () => startPCA(img);
+  img.src    = URL.createObjectURL(file);
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.add('drag-over');
+}
+function onDragLeave(e) {
+  document.getElementById('upload-zone').classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0]; if (!file || !file.type.startsWith('image/')) return;
+  const img  = new Image();
+  img.onload = () => startPCA(img);
+  img.src    = URL.createObjectURL(file);
+}
+
+function loadSampleImage() {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => startPCA(img);
+  img.src = 'data:image/png;base64,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';
+}
+
+function resetDemo() {
+  document.getElementById('demo-panel').style.display  = 'none';
+  document.getElementById('upload-zone').style.display = 'block';
+  document.getElementById('file-input').value          = '';
+}
+</script>
+</body>
+</html>
